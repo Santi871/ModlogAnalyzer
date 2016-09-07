@@ -1,3 +1,6 @@
+/.idea
+/explainlikeimfive.db
+/oauth.ini
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
