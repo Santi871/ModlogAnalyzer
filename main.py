@@ -14,6 +14,6 @@ if __name__ == "__main__":
     while True:
         try:
             logger.pull_modlog()
-        except (praw.errors.HTTPException, requests.exceptions.HTTPError):
+        except (praw.errors.HTTPException, requests.exceptions.HTTPError, requests.exceptions.ConnectionError):
             sleep(2)
 
