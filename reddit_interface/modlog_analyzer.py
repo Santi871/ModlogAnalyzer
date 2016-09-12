@@ -1,6 +1,13 @@
 from time import sleep
 from reddit_interface.database import *
 import datetime
+from slack_interface.incoming_webhooks import IncomingWebhook, SlackMessage
+import configparser
+
+
+config = configparser.ConfigParser()
+config.read('config.ini')
+WEBHOOK_URL = config.get('slack', 'webhook_url')
 
 
 class ModUser:
@@ -25,6 +32,7 @@ class ModlogLogger:
         self.r = r
         self.subreddit = self.r.get_subreddit(subreddit)
         self.already_done = list()
+        self.webhook = IncomingWebhook(WEBHOOK_URL)
         db.init(subreddit + '.db')
         db.connect()
 
@@ -33,6 +41,8 @@ class ModlogLogger:
         except OperationalError:
             pass
         self.pull_mods()
+        self.forbidden_actions = ("removelink", "approvelink", "approvecomment", "distinguish", "ignorereports",
+                                  "sticky", "unsticky")
 
     def pull_mods(self):
 
@@ -74,10 +84,20 @@ class ModlogLogger:
                         'target_title': item.target_title,
                         'target_author': item.target_author,
                         'target_fullname': item.target_fullname,
+                        'target_permalink': item.target_permalink,
                         'sr_id36': item.sr_id36,
                         'item_id': item.id
                     }
                     data_source.append(item_dict)
+                    mod_type = Moderator.get(Moderator.name == item.mod).type
+
+                    if mod_type == "comments" and item.action in self.forbidden_actions:
+                        slack_payload = SlackMessage()
+                        slack_payload.add_attachment(title="Comments moderator has performed a forbidden modaction.",
+                                                     title_link=item.target_permalink,
+                                                     text=item.mod + " performed action '%s'" % item.action,
+                                                     color='danger')
+                        self.webhook.send_message(slack_payload)
 
             with db.atomic():
                 try:
@@ -87,8 +107,18 @@ class ModlogLogger:
             sleep(wait)
 
 
-def count_mod_actions(moderator):
-    return len(ModAction.select().join(Moderator).where(Moderator.name == moderator))
+def count_mod_actions(moderator, period='all'):
+    threshold_timestamp = datetime.datetime.utcnow()
+
+    if period == 'month':
+        threshold_timestamp = threshold_timestamp - datetime.timedelta(days=30)
+    elif period == 'week':
+        threshold_timestamp = threshold_timestamp - datetime.timedelta(days=7)
+    elif period == 'day':
+        threshold_timestamp = threshold_timestamp - datetime.timedelta(days=1)
+
+    return len(ModAction.select().join(Moderator).where(Moderator.name == moderator and
+                                                        ModAction.created_utc < threshold_timestamp.timestamp()))
 
 
 
