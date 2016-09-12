@@ -95,7 +95,7 @@ class ModlogLogger:
                         slack_payload = SlackMessage()
                         slack_payload.add_attachment(title="Comments moderator has performed a forbidden modaction.",
                                                      title_link=item.target_permalink,
-                                                     text=item.mod + " performed action '%s'" % item.action,
+                                                     text=item.mod + " performed action '%s'." % item.action,
                                                      color='danger')
                         self.webhook.send_message(slack_payload)
 
